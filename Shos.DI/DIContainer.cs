@@ -19,6 +19,7 @@ namespace Shos.DI
         Dictionary<Type, TypeInformation> typeInformations = new();
 
         public object? GetInstance<T>() => GetInstance(typeof(T));
+        public void Register<T>() => Register(typeof(T));
 
         object? GetInstance(Type type)
         {
@@ -44,7 +45,6 @@ namespace Shos.DI
             return null;
         }
 
-        public void Register<T>() => Register(typeof(T));
         void Register(Type type) => typeInformations[type] = new TypeInformation(type);
     }
 
