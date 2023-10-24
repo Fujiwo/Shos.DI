@@ -109,7 +109,8 @@ namespace Shos.DI
             if (instance is not null)
                 return instance;
 
-            if (constructorInfoTable is null || !constructorInfoTable.TryGetValue(parameterTypes, out var constructor))
+            var constructor    = this[parameterTypes];
+            if (constructor is null)
                 return null;
 
             instance           = constructor.Invoke(parameters);
