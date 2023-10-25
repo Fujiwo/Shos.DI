@@ -37,6 +37,7 @@ namespace Shos.DI
         }
 
         public void Register<T>() => Register(typeof(T));
+        public void Register(Type type) => typeInformations[type] = new TypeInformation(type);
 
         public bool Register(string typeName)
         {
@@ -76,8 +77,6 @@ namespace Shos.DI
             }
             return type.GetInstance(parameters);
         }
-
-        void Register(Type type) => typeInformations[type] = new TypeInformation(type);
 
         Type? ToType(string typeName)
             => AppDomain.CurrentDomain.GetAssemblies().Select(assembly => assembly.GetType(typeName))

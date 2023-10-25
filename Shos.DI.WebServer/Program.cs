@@ -1,4 +1,4 @@
-﻿namespace Shos.ID.WebServer;
+﻿namespace Shos.DI.WebServer;
 
 class Program
 {
