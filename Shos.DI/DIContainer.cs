@@ -12,6 +12,9 @@ namespace Shos.DI
 
         public static object? GetInstance(this Type @this)
             => @this.GetConstructor(new Type[0])?.Invoke(new object[0]);
+
+        public static object? GetInstance(this Type @this, params object[] parameters)
+            => @this.GetConstructor(parameters.Select(parameter => parameter.GetType()).ToArray())?.Invoke(parameters);
     }
 
     public class DIContainer
@@ -19,16 +22,35 @@ namespace Shos.DI
         Dictionary<Type, TypeInformation> typeInformations = new();
 
         public object? GetInstance<T>() => GetInstance(typeof(T));
+        public object? GetInstance<T>(params object[] parameters) => GetInstance(typeof(T), parameters);
+
+        public object? GetInstance(string typeName)
+        {
+            var type = ToType(typeName);
+            return type is null ? null : GetInstance(type);
+        }
+
+        public object? GetInstance(string typeName, params object[] parameters)
+        {
+            var type = ToType(typeName);
+            return type is null ? null : GetInstance(type, parameters);
+        }
+
         public void Register<T>() => Register(typeof(T));
+
+        public bool Register(string typeName)
+        {
+            var type = ToType(typeName);
+            if (type is null)
+                return false;
+            Register(type);
+            return true;
+        }
 
         object? GetInstance(Type type)
         {
-            var instance = type.GetInstance();
-            if (instance is not null)
-                return instance;
-
             if (typeInformations.TryGetValue(type, out var typeInformation)) {
-                instance = typeInformation.GetInstance();
+                var instance = typeInformation.GetInstance();
                 if (instance is not null)
                     return instance;
 
@@ -42,10 +64,22 @@ namespace Shos.DI
                     return constructor.Invoke(parameters);
                 }
             }
-            return null;
+            return type.GetInstance();
+        }
+
+        object? GetInstance(Type type, params object[] parameters)
+        {
+            if (typeInformations.TryGetValue(type, out var typeInformation)) {
+                var instance = typeInformation.GetInstance(parameters);
+                if (instance is not null)
+                    return instance;
+            }
+            return type.GetInstance(parameters);
         }
 
         void Register(Type type) => typeInformations[type] = new TypeInformation(type);
+
+        Type? ToType(string typeName) => Type.GetType(typeName) ?? Assembly.GetEntryAssembly()?.GetType(typeName);
     }
 
     public class TypeInformation
@@ -100,7 +134,7 @@ namespace Shos.DI
 
         public object? GetInstance() => GetInstance(new object[0]);
 
-        public object? GetInstance(object[] parameters)
+        public object? GetInstance(params object[] parameters)
         {
             Initialize();
 
