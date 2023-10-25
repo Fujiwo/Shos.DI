@@ -79,7 +79,9 @@ namespace Shos.DI
 
         void Register(Type type) => typeInformations[type] = new TypeInformation(type);
 
-        Type? ToType(string typeName) => Type.GetType(typeName) ?? Assembly.GetEntryAssembly()?.GetType(typeName);
+        Type? ToType(string typeName)
+            => AppDomain.CurrentDomain.GetAssemblies().Select(assembly => assembly.GetType(typeName))
+                                                      .FirstOrDefault(type => type is not null);
     }
 
     public class TypeInformation
