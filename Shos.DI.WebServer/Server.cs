@@ -5,7 +5,7 @@ using System.Net;
 using System.Net.WebSockets;
 using System.Text;
 
-class SampleServer
+class SampleServer : IDisposable
 {
     readonly HttpListener listener = new HttpListener();
 
@@ -16,6 +16,9 @@ class SampleServer
         listener.Start();
         listener.BeginGetContext(OnRequested, null);
     }
+
+    protected virtual string? GetContent(HttpListenerRequest request)
+        => new WebAppManager().GetView(request);
 
     void OnRequested(IAsyncResult result)
     {
@@ -36,18 +39,18 @@ class SampleServer
     static bool CanAccept(HttpMethod expected, string requested)
         => string.Equals(expected.Method, requested, StringComparison.CurrentCultureIgnoreCase);
 
-    static bool ProcessGetRequest(HttpListenerContext context)
+    bool ProcessGetRequest(HttpListenerContext context)
     {
         var request = context.Request;
         var response = context.Response;
         if (!CanAccept(HttpMethod.Get, request.HttpMethod) || request.IsWebSocketRequest)
             return false;
 
-        var view = new WebAppManager().GetView(request);
+        var content = GetContent(request);
 
         response.StatusCode = (int)HttpStatusCode.OK;
         using (var writer = new StreamWriter(response.OutputStream, Encoding.UTF8))
-            writer.WriteLine(view ?? "Not Found.");
+            writer.WriteLine(content ?? "Not Found.");
 
         response.Close();
         return true;
@@ -73,4 +76,6 @@ class SampleServer
         listener.Stop();
         listener.Close();
     }
+
+    public void Dispose() => Stop();
 }

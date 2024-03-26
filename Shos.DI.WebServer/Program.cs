@@ -4,13 +4,12 @@ class Program
 {
     static void Main(string[] args)
     {
-        var server = new SampleServer();
+        using var server = new SampleServer();
         server.Start(
             "http://+:8080/",
-            "https://+:44300/");
+            "https://+:44301/");
         char ch;
         while ((ch = Console.ReadKey().KeyChar) != 'q')
             ;
-        server.Stop();
     }
 }
