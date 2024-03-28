@@ -8,4 +8,10 @@
   <Target Name="PostBuild" AfterTargets="PostBuildEvent">
     <Exec Command="xcopy /s /y /d $(ProjectDir)bin\$(Configuration)\net7.0\* $(SolutionDir)Shos.DI.WebServer\bin\$(Configuration)\net7.0\Apps\" />
   </Target>
+  <ItemGroup>
+    <PackageReference Include="Roslynator.Analyzers" Version="4.12.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
 </Project>

@@ -1,4 +1,3 @@
-
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.7.34202.233
@@ -10,6 +9,11 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shos.DI.WebApp", "Shos.DI.WebApp\Shos.DI.WebApp.csproj", "{080C1512-BC36-4E58-908D-4A5B41FBA250}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Shos.DI.WebServer", "Shos.DI.WebServer\Shos.DI.WebServer.csproj", "{CAFE8FBA-544A-41F0-A533-4E8291160860}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution Files", "{0C035F04-0E74-4034-9FE4-6DF677FE7813}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Build.props = Directory.Build.props
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
