@@ -5,20 +5,18 @@ namespace Shos.DI.WebServer
 {
     class WebAppManager
     {
-        DIContainer container = new();
-        IEnumerable<Type>? types = null;
+        readonly DIContainer        container = new();
+        readonly IEnumerable<Type>? types;
 
         public WebAppManager()
         {
             const string appFileEnd = ".dll";
-            var files = Directory.GetFiles("Apps").Where(fileName => fileName.EndsWith(appFileEnd));
-            var assemblies = files.Select(file => Assembly.LoadFrom(file));
-            var types = assemblies.Select(assembly => assembly.GetTypes())
-                                  .SelectMany(_ => _);
-            this.types = types;
-            types.ToList().ForEach(type => container.Register(type));
+            var files      = Directory.GetFiles("Apps").Where(fileName => fileName.EndsWith(appFileEnd));
+            var assemblies = files.Select(Assembly.LoadFrom);
+            types          = assemblies.Select(assembly => assembly.GetTypes())
+                                       .SelectMany(_ => _);
+            types.ToList().ForEach(container.Register);
         }
-
 
         public string? GetView(HttpListenerRequest request)
         {
@@ -41,7 +39,7 @@ namespace Shos.DI.WebServer
                 return null;
 
             var action = controllerType.GetMethod(actionName);
-            return action?.Invoke(controller, new object[0]) as string;
+            return action?.Invoke(controller, []) as string;
         }
 
         static (string controllerName, string actionName) Split(Uri uri)

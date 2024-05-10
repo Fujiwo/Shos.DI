@@ -7,7 +7,7 @@ using System.Text;
 
 class SampleServer : IDisposable
 {
-    readonly HttpListener listener = new HttpListener();
+    readonly HttpListener listener = new();
 
     public void Start(params string[] prefixes)
     {
@@ -41,14 +41,14 @@ class SampleServer : IDisposable
 
     bool ProcessGetRequest(HttpListenerContext context)
     {
-        var request = context.Request;
-        var response = context.Response;
+        var request         = context.Request ;
+        var response        = context.Response;
         if (!CanAccept(HttpMethod.Get, request.HttpMethod) || request.IsWebSocketRequest)
             return false;
 
-        var content = GetContent(request);
-
+        var content         = GetContent(request);
         response.StatusCode = (int)HttpStatusCode.OK;
+
         using (var writer = new StreamWriter(response.OutputStream, Encoding.UTF8))
             writer.WriteLine(content ?? "Not Found.");
 

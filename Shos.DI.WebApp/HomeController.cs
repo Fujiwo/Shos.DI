@@ -1,20 +1,16 @@
 ﻿namespace Shos.DI.WebApp
 {
-    public class HomeController
+    public class HomeController(Context context)
     {
-        readonly Context context;
-
-        public HomeController(Context context) => this.context = context;
+        readonly Context context = context;
 
         public string Index() => $"Index: {context}";
         public string Detail() => $"Detail: {context}";
     }
 
-    public class Context
+    public class Context(ContextOption option)
     {
-        readonly ContextOption option;
-
-        public Context(ContextOption option) => this.option = option;
+        readonly ContextOption option = option;
 
         public override string ToString() => $"{nameof(Context)}: 1 ({nameof(ContextOption)}: {option})";
     }

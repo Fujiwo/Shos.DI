@@ -11,7 +11,7 @@ namespace Shos.DI
         }
 
         public static object? GetInstance(this Type @this)
-            => @this.GetConstructor(new Type[0])?.Invoke(new object[0]);
+            => @this.GetConstructor([])?.Invoke([]);
 
         public static object? GetInstance(this Type @this, params object[] parameters)
             => @this.GetConstructor(parameters.Select(parameter => parameter.GetType()).ToArray())?.Invoke(parameters);
@@ -19,7 +19,7 @@ namespace Shos.DI
 
     public class DIContainer
     {
-        Dictionary<Type, TypeInformation> typeInformations = new();
+        readonly Dictionary<Type, TypeInformation> typeInformations = [];
 
         public object? GetInstance<T>() => GetInstance(typeof(T));
         public object? GetInstance<T>(params object[] parameters) => GetInstance(typeof(T), parameters);
@@ -78,19 +78,19 @@ namespace Shos.DI
             return type.GetInstance(parameters);
         }
 
-        Type? ToType(string typeName)
+        static Type? ToType(string typeName)
             => AppDomain.CurrentDomain.GetAssemblies().Select(assembly => assembly.GetType(typeName))
                                                       .FirstOrDefault(type => type is not null);
     }
 
-    public class TypeInformation
+    public class TypeInformation(Type type)
     {
         Dictionary<Type[], ConstructorInfo>? constructorInfoTable = null;
         Dictionary<ConstructorInfo, Type[]>? parameterTypesTable  = null;
         Dictionary<Type[], object         >? instanceTable        = null;
         ConstructorInfo[]?                   constructors         = null;
 
-        public Type Type { get; private set; }
+        public Type Type { get; } = type;
 
         public IEnumerable<ConstructorInfo> Constructors {
             get {
@@ -102,38 +102,38 @@ namespace Shos.DI
         public Type[]? this[ConstructorInfo constructor] {
             private set {
                 if (value is null)
-                    throw new ArgumentNullException(nameof(value));
-                if (parameterTypesTable is null)
-                    parameterTypesTable = new();
-                parameterTypesTable[constructor] = value;
+                    ArgumentNullException.ThrowIfNull(nameof(value));
+                parameterTypesTable ??= [];
+                parameterTypesTable[constructor] = value!;
             }
             get {
                 Initialize();
-                if (parameterTypesTable is null)
-                    return null;
-                return  parameterTypesTable.TryGetValue(constructor, out var parameterTypes) ? parameterTypes : null;
+                return parameterTypesTable is null
+                       ? null
+                       : parameterTypesTable.TryGetValue(constructor, out var parameterTypes) ? parameterTypes
+                                                                                              : null;
             }
         }
 
         ConstructorInfo? this[Type[] parameter] {
             set {
                 if (value is null)
-                    throw new ArgumentNullException(nameof(value));
-                if (constructorInfoTable is null)
-                    constructorInfoTable = new();
-                constructorInfoTable[parameter] = value;
+                    ArgumentNullException.ThrowIfNull(nameof(value));
+                constructorInfoTable ??= [];
+                constructorInfoTable[parameter] = value!;
             }
             get {
                 Initialize();
-                if (constructorInfoTable is null)
-                    return null;
-                return constructorInfoTable.TryGetValue(parameter, out var constructor) ? constructor : null;
+                return constructorInfoTable is null
+                       ? null
+                       : constructorInfoTable.TryGetValue(parameter, out var constructor) ? constructor
+                                                                                          : null;
             }
         }
 
-        public TypeInformation(Type type) => Type = type;
+        //public TypeInformation(Type type) => Type = type;
 
-        public object? GetInstance() => GetInstance(new object[0]);
+        public object? GetInstance() => GetInstance([]);
 
         public object? GetInstance(params object[] parameters)
         {
@@ -162,24 +162,24 @@ namespace Shos.DI
             var pairs    = constructors.Select(constructor => (constructor.GetParameters().Select(parameterInfo => parameterInfo.ParameterType).ToArray(), constructor)).ToList();
 
             pairs.ForEach(pair => {
-                this[pair.Item1] = pair.Item2;
-                this[pair.Item2] = pair.Item1;
+                this[pair.Item1      ] = pair.constructor;
+                this[pair.constructor] = pair.Item1      ;
             });
         }
 
         void SetInstance(Type[] parameterTypes, object instance)
         {
-            if (instanceTable is null)
-                instanceTable = new();
+            instanceTable ??= [];
             instanceTable[parameterTypes] = instance;
         }
 
         object? GetInstance(Type[] parameterTypes)
         {
             Initialize();
-            if (instanceTable is null)
-                return null;
-            return instanceTable.TryGetValue(parameterTypes, out var instance) ? instance : null;
+            return instanceTable is null
+                   ? null
+                   : instanceTable.TryGetValue(parameterTypes, out var instance) ? instance
+                                                                                 : null    ;
         }
     }
 }

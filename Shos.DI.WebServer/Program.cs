@@ -1,8 +1,8 @@
 ﻿namespace Shos.DI.WebServer;
 
-class Program
+static class Program
 {
-    static void Main(string[] args)
+    static void Main()
     {
         using var server = new SampleServer();
         server.Start(

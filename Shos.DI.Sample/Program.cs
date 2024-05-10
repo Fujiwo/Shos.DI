@@ -71,5 +71,5 @@ public class Foo
 {
     public Foo(Boo2 boo2, Boo3 boo3) => Console.WriteLine($"{nameof(Foo)}({nameof(Boo2)}, {nameof(Boo3)})");
 
-    public override string ToString() => $"{nameof(Foo)}";
+    public override string ToString() => nameof(Foo);
 }
