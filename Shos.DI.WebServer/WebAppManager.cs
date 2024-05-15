@@ -10,8 +10,10 @@ namespace Shos.DI.WebServer
 
         public WebAppManager()
         {
-            const string appFileEnd = ".dll";
-            var files      = Directory.GetFiles("Apps").Where(fileName => fileName.EndsWith(appFileEnd));
+            const string appFileEnd    = ".dll";
+            const string appFolderName = "Apps";
+
+            var files      = Directory.GetFiles(appFolderName).Where(fileName => fileName.EndsWith(appFileEnd));
             var assemblies = files.Select(Assembly.LoadFrom);
             types          = assemblies.Select(assembly => assembly.GetTypes())
                                        .SelectMany(_ => _);
@@ -30,6 +32,7 @@ namespace Shos.DI.WebServer
         string? GetView(string controllerName, string actionName)
         {
             const string controllerSuffix = "Controller";
+
             var controllerType = types?.FirstOrDefault(type => type.Name == $"{controllerName}{controllerSuffix}");
             if (controllerType is null)
                 return null;

@@ -59,7 +59,7 @@ namespace Shos.DI
                     var parameterTypes = typeInformation[constructor];
                     if (parameterTypes is null)
                         continue;
-                    var parameters = parameterTypes.Select(parameterType => GetInstance(parameterType)).ToArray();
+                    var parameters = parameterTypes.Select(GetInstance).ToArray();
                     if (parameters.Any(parameter => parameter is null))
                         continue;
                     return constructor.Invoke(parameters);
@@ -130,8 +130,6 @@ namespace Shos.DI
                                                                                           : null;
             }
         }
-
-        //public TypeInformation(Type type) => Type = type;
 
         public object? GetInstance() => GetInstance([]);
 
