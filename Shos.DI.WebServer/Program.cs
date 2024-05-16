@@ -4,12 +4,19 @@ static class Program
 {
     static void Main()
     {
-        using var server = new SampleServer();
-        server.Start(
-            "http://+:8080/",
-            "https://+:44301/");
-        char ch;
-        while ((ch = Console.ReadKey().KeyChar) != 'q')
+        try {
+            using var server = new SampleServer();
+            server.Start("http://+:8080/", "https://+:44301/");
+            Wait();
+        } catch (Exception e) {
+            Console.WriteLine($"Error: {e}");
+        }
+    }
+
+    static void Wait()
+    {
+        const char quitCharacter = 'q';
+        while (Console.ReadKey().KeyChar != quitCharacter)
             ;
     }
 }
