@@ -2,7 +2,6 @@
 
 using System;
 using System.Net;
-using System.Net.WebSockets;
 using System.Text;
 
 class SampleServer : IDisposable
@@ -15,6 +14,7 @@ class SampleServer : IDisposable
             listener.Prefixes.Add(prefix);
         listener.Start();
         listener.BeginGetContext(OnRequested, null);
+        Log("Listening...\n");
     }
 
     protected virtual string? GetContent(HttpListenerRequest request)
@@ -28,7 +28,8 @@ class SampleServer : IDisposable
         HttpListenerContext context = listener.EndGetContext(result);
         listener.BeginGetContext(OnRequested, listener);
 
-        try {
+        try
+        {
             if (ProcessGetRequest(context))
                 return;
         } catch (Exception e) {
@@ -43,6 +44,7 @@ class SampleServer : IDisposable
     {
         var request         = context.Request ;
         var response        = context.Response;
+        Log(request);
         if (!CanAccept(HttpMethod.Get, request.HttpMethod) || request.IsWebSocketRequest)
             return false;
 
@@ -53,8 +55,27 @@ class SampleServer : IDisposable
             writer.WriteLine(content ?? "Not Found.");
 
         response.Close();
+        Log(response);
         return true;
     }
+
+    static void Log(HttpListenerRequest request)
+    {
+        Log($"Request:\n{request.HttpMethod} {request.Url}");
+        foreach (string key in request.Headers.AllKeys)
+            Log($"{key}: {request.Headers[key]}");
+        Log();
+    }
+
+    static void Log(HttpListenerResponse response)
+    {
+        Log($"Response:\n{response.StatusCode} {response.StatusDescription}");
+        foreach (string key in response.Headers.AllKeys)
+            Log($"{key}: {response.Headers[key]}");
+        Log();
+    }
+
+    static void Log(string log = "") => Console.WriteLine(log);
 
     static void ReturnInternalError(HttpListenerResponse response, Exception cause)
     {
