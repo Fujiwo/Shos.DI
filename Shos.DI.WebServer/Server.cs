@@ -17,8 +17,18 @@ class SampleServer : IDisposable
         Log("Listening...\n");
     }
 
+    public void Stop()
+    {
+        listener.Stop();
+        listener.Close();
+    }
+
+    public void Dispose() => Stop();
+
     protected virtual string? GetContent(HttpListenerRequest request)
-        => new WebAppManager().GetView(request);
+        => request.AcceptTypes is not null && request.AcceptTypes.Contains("text/html")
+           ? new WebAppManager().GetView(request)
+           : null;
 
     void OnRequested(IAsyncResult result)
     {
@@ -45,11 +55,12 @@ class SampleServer : IDisposable
         var request         = context.Request ;
         var response        = context.Response;
         Log(request);
+
         if (!CanAccept(HttpMethod.Get, request.HttpMethod) || request.IsWebSocketRequest)
             return false;
 
         var content         = GetContent(request);
-        response.StatusCode = (int)HttpStatusCode.OK;
+        response.StatusCode = (int)(content is null ? HttpStatusCode.NotFound : HttpStatusCode.OK);
 
         using (var writer = new StreamWriter(response.OutputStream, Encoding.UTF8))
             writer.WriteLine(content ?? "Not Found.");
@@ -62,6 +73,7 @@ class SampleServer : IDisposable
     static void Log(HttpListenerRequest request)
     {
         Log($"Request:\n{request.HttpMethod} {request.Url}");
+
         foreach (string key in request.Headers.AllKeys)
             Log($"{key}: {request.Headers[key]}");
         Log();
@@ -91,12 +103,4 @@ class SampleServer : IDisposable
             response.Abort();
         }
     }
-
-    public void Stop()
-    {
-        listener.Stop();
-        listener.Close();
-    }
-
-    public void Dispose() => Stop();
 }
