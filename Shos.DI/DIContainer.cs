@@ -2,21 +2,6 @@
 
 namespace Shos.DI
 {
-    static class Extensions
-    {
-        public static void ForEach<TElement>(this IEnumerable<TElement> @this, Action<TElement> action)
-        {
-            foreach (var element in @this)
-                action(element);
-        }
-
-        public static object? GetInstance(this Type @this)
-            => @this.GetConstructor([])?.Invoke([]);
-
-        public static object? GetInstance(this Type @this, params object[] parameters)
-            => @this.GetConstructor(parameters.Select(parameter => parameter.GetType()).ToArray())?.Invoke(parameters);
-    }
-
     public class DIContainer
     {
         readonly Dictionary<Type, TypeInformation> typeInformations = [];
@@ -83,7 +68,7 @@ namespace Shos.DI
                                                       .FirstOrDefault(type => type is not null);
     }
 
-    public class TypeInformation(Type type)
+    class TypeInformation(Type type)
     {
         Dictionary<Type[], ConstructorInfo>? constructorInfoTable = null;
         Dictionary<ConstructorInfo, Type[]>? parameterTypesTable  = null;
@@ -179,5 +164,22 @@ namespace Shos.DI
                    : instanceTable.TryGetValue(parameterTypes, out var instance) ? instance
                                                                                  : null    ;
         }
+    }
+    static class EnumerableExtensions
+    {
+        public static void ForEach<TElement>(this IEnumerable<TElement> @this, Action<TElement> action)
+        {
+            foreach (var element in @this)
+                action(element);
+        }
+    }
+
+    static class ActivatorExtensions
+    {
+        public static object? GetInstance(this Type @this)
+            => @this.GetConstructor([])?.Invoke([]);
+
+        public static object? GetInstance(this Type @this, params object[] parameters)
+            => @this.GetConstructor(parameters.Select(parameter => parameter.GetType()).ToArray())?.Invoke(parameters);
     }
 }
