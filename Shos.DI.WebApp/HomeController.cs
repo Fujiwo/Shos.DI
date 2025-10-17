@@ -1,12 +1,15 @@
 ﻿namespace Shos.DI.WebApp
 {
-    public class HomeController(ContextX context)
+    public class HomeController(ContextX context, HogeHoge hogeHoge)
     {
         readonly ContextX context = context;
 
         public string Index() => $"{nameof(Index)}: {context}";
         public string Detail() => $"{nameof(Detail)}: {context}";
     }
+
+    public class HogeHoge
+    { }
 
     public class ContextX(ContextOptionY option)
     {
