@@ -1,4 +1,4 @@
-﻿using Shos.DI;
+using Shos.DI;
 
 {
     Console.WriteLine("■ Case 1.");

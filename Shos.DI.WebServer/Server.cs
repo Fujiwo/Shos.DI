@@ -1,4 +1,4 @@
-﻿namespace Shos.DI.WebServer;
+namespace Shos.DI.WebServer;
 
 using System;
 using System.Net;
@@ -14,7 +14,7 @@ class SampleServer : IDisposable
             listener.Prefixes.Add(prefix);
         listener.Start();
         listener.BeginGetContext(OnRequested, null);
-        Log("Listening...\n");
+        Log($"Listening...\n{string.Join("\n", prefixes)}");
     }
 
     public void Stop()

@@ -1,4 +1,4 @@
-﻿namespace Shos.DI.WebServer;
+namespace Shos.DI.WebServer;
 
 static class Program
 {

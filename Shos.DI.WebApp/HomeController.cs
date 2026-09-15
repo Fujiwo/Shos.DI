@@ -1,4 +1,4 @@
-﻿namespace Shos.DI.WebApp
+namespace Shos.DI.WebApp
 {
     public class HomeController(ContextX context, HogeHoge hogeHoge)
     {
@@ -9,7 +9,7 @@
     }
 
     public class HogeHoge
-    { }
+    {}
 
     public class ContextX(ContextOptionY option)
     {
