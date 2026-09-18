@@ -238,7 +238,7 @@ sequenceDiagram
 
     B->>L: GET /Home/Index (Accept: text/html)
     L->>S: OnRequested(context)
-    S->>S: log request; GET? not a WebSocket? Accept text/html?
+    S->>S: log request, GET? not a WebSocket? Accept text/html?
     S->>M: GetView(request)
     M->>M: load Apps/*.dll, register every type
     M->>M: Split(url) → ("Home", "Index")
