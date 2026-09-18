@@ -14,6 +14,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Files", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		Directory.Build.props = Directory.Build.props
 		LICENSE.txt = LICENSE.txt
+		README.jp.md = README.jp.md
 		README.md = README.md
 	EndProjectSection
 EndProject
