@@ -51,8 +51,6 @@ Shos.DI implements that mechanism in about 180 lines of C#, then wires it into a
 | [**Shos.DI.WebServer**](Shos.DI.WebServer) | Console app (server) | A minimal HTTP server built on `HttpListener`, plus a minimal MVC-style dispatcher. Plays the role of Kestrel + routing + controller activation. |
 | [**Shos.DI.WebApp**](Shos.DI.WebApp) | Class library (plugin) | A sample "web application" — a controller and its dependency graph. Loaded **at runtime** by `Shos.DI.WebServer`. |
 
-> **Note:** the repository also contains a `WebApplication1` directory (a stock ASP.NET Core MVC template). It is not part of `Shos.DI.sln` and is not referenced by any of the projects above, so it is not covered by this document.
-
 ---
 
 ## Architecture

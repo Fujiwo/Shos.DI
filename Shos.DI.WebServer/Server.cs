@@ -74,16 +74,20 @@ class SampleServer : IDisposable
     {
         Log($"Request:\n{request.HttpMethod} {request.Url}");
 
-        foreach (string key in request.Headers.AllKeys)
-            Log($"{key}: {request.Headers[key]}");
+        foreach (var key in request.Headers.AllKeys) {
+            if (key is not null)
+                Log($"{key}: {request.Headers[key]}");
+        }
         Log();
     }
 
     static void Log(HttpListenerResponse response)
     {
         Log($"Response:\n{response.StatusCode} {response.StatusDescription}");
-        foreach (string key in response.Headers.AllKeys)
-            Log($"{key}: {response.Headers[key]}");
+        foreach (var key in response.Headers.AllKeys) {
+            if (key is not null)
+                Log($"{key}: {response.Headers[key]}");
+        }
         Log();
     }
 

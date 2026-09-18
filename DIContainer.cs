@@ -86,9 +86,10 @@ class TypeInformation(Type type)
 
     public Type[]? this[ConstructorInfo constructor] {
         private set {
-            ArgumentNullException.ThrowIfNull(value);
+            if (value is null)
+                ArgumentNullException.ThrowIfNull(nameof(value));
             parameterTypesTable ??= [];
-            parameterTypesTable[constructor] = value;
+            parameterTypesTable[constructor] = value!;
         }
         get {
             Initialize();
@@ -101,9 +102,10 @@ class TypeInformation(Type type)
 
     ConstructorInfo? this[Type[] parameter] {
         set {
-            ArgumentNullException.ThrowIfNull(value);
-            constructorInfoTable ??= new(TypeArrayComparer.Instance);
-            constructorInfoTable[parameter] = value;
+            if (value is null)
+                ArgumentNullException.ThrowIfNull(nameof(value));
+            constructorInfoTable ??= [];
+            constructorInfoTable[parameter] = value!;
         }
         get {
             Initialize();
@@ -150,7 +152,7 @@ class TypeInformation(Type type)
 
     void SetInstance(Type[] parameterTypes, object instance)
     {
-        instanceTable ??= new(TypeArrayComparer.Instance);
+        instanceTable ??= [];
         instanceTable[parameterTypes] = instance;
     }
 
@@ -163,23 +165,6 @@ class TypeInformation(Type type)
                                                                              : null    ;
     }
 }
-
-sealed class TypeArrayComparer : IEqualityComparer<Type[]>
-{
-    public static readonly TypeArrayComparer Instance = new();
-
-    public bool Equals(Type[]? x, Type[]? y)
-        => x is null ? y is null : y is not null && x.AsSpan().SequenceEqual(y);
-
-    public int GetHashCode(Type[] types)
-    {
-        var hash = new HashCode();
-        foreach (var type in types)
-            hash.Add(type);
-        return hash.ToHashCode();
-    }
-}
-
 static class EnumerableExtensions
 {
     public static void ForEach<TElement>(this IEnumerable<TElement> @this, Action<TElement> action)

@@ -16,8 +16,9 @@ class WebAppManager
         var files      = Directory.GetFiles(appFolderName).Where(fileName => fileName.EndsWith(appFileEnd));
         var assemblies = files.Select(Assembly.LoadFrom);
         types          = assemblies.Select(assembly => assembly.GetTypes())
-                                   .SelectMany(_ => _);
-        types.ToList().ForEach(container.Register);
+                                   .SelectMany(_ => _)
+                                   .ToList();
+        types.ForEach(container.Register);
     }
 
     public string? GetView(HttpListenerRequest request)
