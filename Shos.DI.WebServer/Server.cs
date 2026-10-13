@@ -6,7 +6,11 @@ using System.Text;
 
 class SampleServer : IDisposable
 {
-    readonly HttpListener listener = new();
+    static readonly Encoding utf8           = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+    static readonly string[] htmlMediaTypes = ["text/html", "text/*", "*/*"];
+
+    readonly HttpListener  listener      = new();
+    readonly WebAppManager webAppManager = new();
 
     public void Start(params string[] prefixes)
     {
@@ -26,48 +30,71 @@ class SampleServer : IDisposable
     public void Dispose() => Stop();
 
     protected virtual string? GetContent(HttpListenerRequest request)
-        => request.AcceptTypes is not null && request.AcceptTypes.Contains("text/html")
-           ? new WebAppManager().GetView(request)
+        => AcceptsHtml(request) && request.Url is not null
+           ? webAppManager.GetView(request.Url)
            : null;
 
     void OnRequested(IAsyncResult result)
     {
-        if (!listener.IsListening)
-            return;
-
-        HttpListenerContext context = listener.EndGetContext(result);
-        listener.BeginGetContext(OnRequested, listener);
-
-        try
-        {
-            if (ProcessGetRequest(context))
+        HttpListenerContext context;
+        try {
+            if (!listener.IsListening)
                 return;
+            context = listener.EndGetContext(result);
+            listener.BeginGetContext(OnRequested, null);
+        } catch (Exception e) when (e is HttpListenerException or ObjectDisposedException or InvalidOperationException) {
+            return; // The listener has been stopped.
+        }
+
+        try {
+            ProcessRequest(context);
         } catch (Exception e) {
             ReturnInternalError(context.Response, e);
         }
     }
 
-    static bool CanAccept(HttpMethod expected, string requested)
-        => string.Equals(expected.Method, requested, StringComparison.CurrentCultureIgnoreCase);
+    // No Accept header means "anything is acceptable".
+    static bool AcceptsHtml(HttpListenerRequest request)
+        => request.AcceptTypes is null ||
+           request.AcceptTypes.Select(acceptType => acceptType.Split(';')[0].Trim())
+                              .Any(mediaType => htmlMediaTypes.Contains(mediaType, StringComparer.OrdinalIgnoreCase));
 
-    bool ProcessGetRequest(HttpListenerContext context)
+    static bool CanAccept(HttpMethod expected, string requested)
+        => string.Equals(expected.Method, requested, StringComparison.OrdinalIgnoreCase);
+
+    void ProcessRequest(HttpListenerContext context)
     {
-        var request         = context.Request ;
-        var response        = context.Response;
+        var request  = context.Request ;
+        var response = context.Response;
         Log(request);
 
-        if (!CanAccept(HttpMethod.Get, request.HttpMethod) || request.IsWebSocketRequest)
-            return false;
+        if (request.IsWebSocketRequest) {
+            Respond(response, HttpStatusCode.BadRequest, "WebSocket is not supported.");
+            return;
+        }
+        if (!CanAccept(HttpMethod.Get, request.HttpMethod)) {
+            response.AddHeader("Allow", HttpMethod.Get.Method);
+            Respond(response, HttpStatusCode.MethodNotAllowed, "Method Not Allowed.");
+            return;
+        }
 
-        var content         = GetContent(request);
-        response.StatusCode = (int)(content is null ? HttpStatusCode.NotFound : HttpStatusCode.OK);
+        var content = GetContent(request);
+        if (content is null)
+            Respond(response, HttpStatusCode.NotFound, "Not Found.");
+        else
+            Respond(response, HttpStatusCode.OK, content, "text/html");
+    }
 
-        using (var writer = new StreamWriter(response.OutputStream, Encoding.UTF8))
-            writer.WriteLine(content ?? "Not Found.");
+    static void Respond(HttpListenerResponse response, HttpStatusCode statusCode, string content, string mediaType = "text/plain")
+    {
+        response.StatusCode  = (int)statusCode;
+        response.ContentType = $"{mediaType}; charset=utf-8";
+
+        using (var writer = new StreamWriter(response.OutputStream, utf8))
+            writer.WriteLine(content);
 
         response.Close();
         Log(response);
-        return true;
     }
 
     static void Log(HttpListenerRequest request)
@@ -96,12 +123,13 @@ class SampleServer : IDisposable
     static void ReturnInternalError(HttpListenerResponse response, Exception cause)
     {
         Console.Error.WriteLine(cause);
-        response.StatusCode = (int)HttpStatusCode.InternalServerError;
-        response.ContentType = "text/plain";
         try {
-            using (var writer = new StreamWriter(response.OutputStream, Encoding.UTF8))
-                writer.Write(cause.ToString());
-            response.Close();
+#if DEBUG
+            // Like ASP.NET Core's developer exception page: show the details only in Debug builds.
+            Respond(response, HttpStatusCode.InternalServerError, cause.ToString());
+#else
+            Respond(response, HttpStatusCode.InternalServerError, "Internal Server Error.");
+#endif
         } catch (Exception e) {
             Console.Error.WriteLine(e);
             response.Abort();

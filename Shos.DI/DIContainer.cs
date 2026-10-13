@@ -5,9 +5,10 @@ namespace Shos.DI;
 public class DIContainer
 {
     readonly Dictionary<Type, TypeInformation> typeInformations = [];
+    readonly Lock                              syncRoot         = new();
 
-    public object? GetInstance<T>() => GetInstance(typeof(T));
-    public object? GetInstance<T>(params object[] parameters) => GetInstance(typeof(T), parameters);
+    public T? GetInstance<T>() where T : class => GetInstance(typeof(T)) as T;
+    public T? GetInstance<T>(params object?[] parameters) where T : class => GetInstance(typeof(T), parameters) as T;
 
     public object? GetInstance(string typeName)
     {
@@ -15,14 +16,44 @@ public class DIContainer
         return type is null ? null : GetInstance(type);
     }
 
-    public object? GetInstance(string typeName, params object[] parameters)
+    public object? GetInstance(string typeName, params object?[] parameters)
     {
         var type = ToType(typeName);
         return type is null ? null : GetInstance(type, parameters);
     }
 
+    public object? GetInstance(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        lock (syncRoot)
+            return Resolve(type, []);
+    }
+
+    // Constructor arguments supplied by the caller: always creates a new instance (never cached).
+    public object? GetInstance(Type type, params object?[] parameters)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        ArgumentNullException.ThrowIfNull(parameters);
+
+        IEnumerable<ConstructorInfo> constructors;
+        lock (syncRoot)
+            constructors = typeInformations.TryGetValue(type, out var typeInformation)
+                           ? typeInformation.Constructors
+                           : TypeInformation.GetOrderedConstructors(type);
+
+        return constructors.FirstOrDefault(constructor => constructor.CanAccept(parameters))?.Invoke(parameters);
+    }
+
     public void Register<T>() => Register(typeof(T));
-    public void Register(Type type) => typeInformations[type] = new TypeInformation(type);
+
+    public void Register(Type type)
+    {
+        ArgumentNullException.ThrowIfNull(type);
+        if (!type.IsInstantiable())
+            throw new ArgumentException($"{type} cannot be registered: it must be a non-abstract, non-generic-definition class.", nameof(type));
+        lock (syncRoot)
+            typeInformations[type] = new TypeInformation(type);
+    }
 
     public bool Register(string typeName)
     {
@@ -33,34 +64,28 @@ public class DIContainer
         return true;
     }
 
-    object? GetInstance(Type type)
+    object? Resolve(Type type, HashSet<Type> resolving)
     {
-        if (typeInformations.TryGetValue(type, out var typeInformation)) {
-            var instance = typeInformation.GetInstance();
-            if (instance is not null)
-                return instance;
+        if (!typeInformations.TryGetValue(type, out var typeInformation))
+            return type.GetInstance();                                  // unregistered: parameterless constructor only
 
-            foreach (var constructor in typeInformation.Constructors) {
-                var parameterTypes = typeInformation[constructor];
-                if (parameterTypes is null)
-                    continue;
-                var parameters = parameterTypes.Select(GetInstance).ToArray();
+        if (typeInformation.Instance is not null)
+            return typeInformation.Instance;                            // registered: one instance per container
+
+        if (!resolving.Add(type))
+            throw new InvalidOperationException($"Circular dependency detected: {string.Join(" -> ", resolving.Append(type))}");
+
+        try {
+            foreach (var constructor in typeInformation.Constructors) { // greediest first
+                var parameters = constructor.GetParameters().Select(parameter => Resolve(parameter.ParameterType, resolving)).ToArray();
                 if (parameters.Any(parameter => parameter is null))
                     continue;
-                return constructor.Invoke(parameters);
+                return typeInformation.Instance = constructor.Invoke(parameters);
             }
+            return null;
+        } finally {
+            resolving.Remove(type);
         }
-        return type.GetInstance();
-    }
-
-    object? GetInstance(Type type, params object[] parameters)
-    {
-        if (typeInformations.TryGetValue(type, out var typeInformation)) {
-            var instance = typeInformation.GetInstance(parameters);
-            if (instance is not null)
-                return instance;
-        }
-        return type.GetInstance(parameters);
     }
 
     static Type? ToType(string typeName)
@@ -70,130 +95,34 @@ public class DIContainer
 
 class TypeInformation(Type type)
 {
-    Dictionary<Type[], ConstructorInfo>? constructorInfoTable = null;
-    Dictionary<ConstructorInfo, Type[]>? parameterTypesTable  = null;
-    Dictionary<Type[], object         >? instanceTable        = null;
-    ConstructorInfo[]?                   constructors         = null;
+    ConstructorInfo[]? constructors = null;
 
-    public Type Type { get; } = type;
+    public Type    Type     { get; } = type;
+    public object? Instance { get; set; }
 
-    public IEnumerable<ConstructorInfo> Constructors {
-        get {
-            Initialize();
-            return constructors!;
-        }
-    }
+    public IEnumerable<ConstructorInfo> Constructors => constructors ??= GetOrderedConstructors(Type);
 
-    public Type[]? this[ConstructorInfo constructor] {
-        private set {
-            ArgumentNullException.ThrowIfNull(value);
-            parameterTypesTable ??= [];
-            parameterTypesTable[constructor] = value;
-        }
-        get {
-            Initialize();
-            return parameterTypesTable is null
-                   ? null
-                   : parameterTypesTable.TryGetValue(constructor, out var parameterTypes) ? parameterTypes
-                                                                                          : null;
-        }
-    }
-
-    ConstructorInfo? this[Type[] parameter] {
-        set {
-            ArgumentNullException.ThrowIfNull(value);
-            constructorInfoTable ??= new(TypeArrayComparer.Instance);
-            constructorInfoTable[parameter] = value;
-        }
-        get {
-            Initialize();
-            return constructorInfoTable is null
-                   ? null
-                   : constructorInfoTable.TryGetValue(parameter, out var constructor) ? constructor
-                                                                                      : null;
-        }
-    }
-
-    public object? GetInstance() => GetInstance([]);
-
-    public object? GetInstance(params object[] parameters)
-    {
-        Initialize();
-
-        var parameterTypes = parameters.Select(parameter => parameter.GetType()).ToArray();
-        var instance       = GetInstance(parameterTypes);
-        if (instance is not null)
-            return instance;
-
-        var constructor    = this[parameterTypes];
-        if (constructor is null)
-            return null;
-
-        instance           = constructor.Invoke(parameters);
-        SetInstance(parameterTypes, instance);
-        return instance;
-    }
-
-    void Initialize()
-    {
-        if (constructors is not null)
-            return;
-
-        constructors = Type.GetConstructors();
-        var pairs    = constructors.Select(constructor => (constructor.GetParameters().Select(parameterInfo => parameterInfo.ParameterType).ToArray(), constructor)).ToList();
-
-        pairs.ForEach(pair => {
-            this[pair.Item1      ] = pair.constructor;
-            this[pair.constructor] = pair.Item1      ;
-        });
-    }
-
-    void SetInstance(Type[] parameterTypes, object instance)
-    {
-        instanceTable ??= new(TypeArrayComparer.Instance);
-        instanceTable[parameterTypes] = instance;
-    }
-
-    object? GetInstance(Type[] parameterTypes)
-    {
-        Initialize();
-        return instanceTable is null
-               ? null
-               : instanceTable.TryGetValue(parameterTypes, out var instance) ? instance
-                                                                             : null    ;
-    }
+    public static ConstructorInfo[] GetOrderedConstructors(Type type)
+        => type.GetConstructors().OrderByDescending(constructor => constructor.GetParameters().Length)
+                                 .ToArray();
 }
 
-sealed class TypeArrayComparer : IEqualityComparer<Type[]>
+static class TypeExtensions
 {
-    public static readonly TypeArrayComparer Instance = new();
+    public static bool IsInstantiable(this Type @this)
+        => @this.IsClass && !@this.IsAbstract && !@this.ContainsGenericParameters;
 
-    public bool Equals(Type[]? x, Type[]? y)
-        => x is null ? y is null : y is not null && x.AsSpan().SequenceEqual(y);
-
-    public int GetHashCode(Type[] types)
-    {
-        var hash = new HashCode();
-        foreach (var type in types)
-            hash.Add(type);
-        return hash.ToHashCode();
-    }
-}
-
-static class EnumerableExtensions
-{
-    public static void ForEach<TElement>(this IEnumerable<TElement> @this, Action<TElement> action)
-    {
-        foreach (var element in @this)
-            action(element);
-    }
-}
-
-static class ActivatorExtensions
-{
     public static object? GetInstance(this Type @this)
-        => @this.GetConstructor([])?.Invoke([]);
+        => @this.GetConstructor(Type.EmptyTypes)?.Invoke([]);
 
-    public static object? GetInstance(this Type @this, params object[] parameters)
-        => @this.GetConstructor(parameters.Select(parameter => parameter.GetType()).ToArray())?.Invoke(parameters);
+    public static bool CanAccept(this ConstructorInfo @this, object?[] arguments)
+    {
+        var parameters = @this.GetParameters();
+        return parameters.Length == arguments.Length &&
+               parameters.Zip(arguments).All(pair => pair.First.ParameterType.CanAccept(pair.Second));
+    }
+
+    static bool CanAccept(this Type @this, object? argument)
+        => argument is null ? !@this.IsValueType || Nullable.GetUnderlyingType(@this) is not null
+                            : @this.IsInstanceOfType(argument);
 }

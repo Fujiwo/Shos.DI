@@ -1,11 +1,17 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <BaseOutputPath>bin\</BaseOutputPath>
   </PropertyGroup>
-  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
-    <Exec Command="xcopy /s /y /d $(ProjectDir)bin\$(Configuration)\net10.0\* $(SolutionDir)Shos.DI.WebServer\bin\$(Configuration)\net10.0\Apps\" />
+  <!-- Deploy this app into the server's Apps folder (cross-platform; replaces the former xcopy post-build event). -->
+  <Target Name="CopyToServerApps" AfterTargets="Build">
+    <ItemGroup>
+      <AppFiles Include="$(OutDir)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(AppFiles)"
+          DestinationFolder="$(MSBuildThisFileDirectory)..\Shos.DI.WebServer\bin\$(Configuration)\$(TargetFramework)\Apps\%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
   </Target>
 </Project>

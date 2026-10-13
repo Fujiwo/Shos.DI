@@ -15,7 +15,20 @@ static class Program
 
     static void Wait()
     {
+        if (Console.IsInputRedirected) {
+            // Console.ReadKey cannot be used without a console (CI, containers, nohup, ...): wait for Ctrl+C instead.
+            using var quit = new ManualResetEventSlim();
+            Console.CancelKeyPress += (_, e) => {
+                e.Cancel = true;
+                quit.Set();
+            };
+            Console.WriteLine("Press Ctrl+C to quit.");
+            quit.Wait();
+            return;
+        }
+
         const char quitCharacter = 'q';
+        Console.WriteLine($"Press '{quitCharacter}' to quit.");
         while (Console.ReadKey().KeyChar != quitCharacter)
             ;
     }

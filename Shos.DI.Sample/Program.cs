@@ -11,7 +11,7 @@ using Shos.DI;
     container.Register<Foo>();
 
     var foo = container.GetInstance<Foo>();
-    Console.WriteLine(foo ?? "Error");
+    Console.WriteLine(foo?.ToString() ?? "Error");
 }
 {
     Console.WriteLine("■ Case 2.");
@@ -24,7 +24,7 @@ using Shos.DI;
     container.Register(nameof(Foo));
 
     var foo = container.GetInstance(nameof(Foo));
-    Console.WriteLine(foo ?? "Error");
+    Console.WriteLine(foo?.ToString() ?? "Error");
 }
 {
     Console.WriteLine("■ Case 3.");
@@ -34,7 +34,7 @@ using Shos.DI;
     container.Register<Foo>();
 
     var foo = container.GetInstance<Foo>(new Boo2(new Coo()), new Boo3(new Boo1()));
-    Console.WriteLine(foo ?? "Error");
+    Console.WriteLine(foo?.ToString() ?? "Error");
 }
 {
     Console.WriteLine("■ Case 4.");
@@ -44,9 +44,11 @@ using Shos.DI;
     container.Register(nameof(Foo));
 
     var foo = container.GetInstance(nameof(Foo), new Boo2(new Coo()), new Boo3(new Boo1()));
-    Console.WriteLine(foo ?? "Error");
+    Console.WriteLine(foo?.ToString() ?? "Error");
 }
 
+// These types are intentionally in the global namespace so that Case 2 and Case 4 can resolve them by nameof(...).
+#pragma warning disable CA1050 // Declare types in namespaces
 public class Coo
 {
     public Coo() => Console.WriteLine(nameof(Coo));
@@ -73,3 +75,4 @@ public class Foo
 
     public override string ToString() => nameof(Foo);
 }
+#pragma warning restore CA1050
