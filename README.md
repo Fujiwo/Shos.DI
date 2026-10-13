@@ -1,5 +1,7 @@
 # Shos.DI
 
+[![build](https://github.com/Fujiwo/Shos.DI/actions/workflows/build.yml/badge.svg)](https://github.com/Fujiwo/Shos.DI/actions/workflows/build.yml)
+
 **Shos.DI** is a from-scratch Dependency Injection (DI) container for .NET, written to *explain* how DI works rather than to compete with production containers.
 
 The whole container is a single file — [`Shos.DI/DIContainer.cs`](Shos.DI/DIContainer.cs) — and the solution then uses it to build a miniature web server and a miniature MVC application, so you can see exactly where a real framework like ASP.NET Core would perform service registration, controller activation, and constructor injection.
@@ -16,6 +18,7 @@ The whole container is a single file — [`Shos.DI/DIContainer.cs`](Shos.DI/DICo
 - [How the container works](#how-the-container-works)
 - [Shos.DI.Sample — DI in a console app](#shosdisample--di-in-a-console-app)
 - [Shos.DI.WebServer and Shos.DI.WebApp — a miniature ASP.NET Core](#shosdiwebserver-and-shosdiwebapp--a-miniature-aspnet-core)
+- [Tests](#tests)
 - [Getting Started](#getting-started)
 - [Running each project](#running-each-project)
 - [Built With](#built-with)
@@ -50,7 +53,7 @@ Shos.DI implements that mechanism in about 130 lines of C#, then wires it into a
 | [**Shos.DI.Sample**](Shos.DI.Sample) | Console app | Four short scenarios that exercise the container directly. The quickest way to understand the API. |
 | [**Shos.DI.WebServer**](Shos.DI.WebServer) | Console app (server) | A minimal HTTP server built on `HttpListener`, plus a minimal MVC-style dispatcher. Plays the role of Kestrel + routing + controller activation. |
 | [**Shos.DI.WebApp**](Shos.DI.WebApp) | Class library (plugin) | A sample "web application" — a controller and its dependency graph. Loaded **at runtime** by `Shos.DI.WebServer`. |
-| [**Shos.DI.Tests**](Shos.DI.Tests) | xUnit test project | Unit tests that pin down the container's behaviour: lifetimes, explicit arguments, constructor selection, cycle detection, thread safety. |
+| [**Shos.DI.Tests**](Shos.DI.Tests) | xUnit test project | Unit tests that pin down the container's behaviour: lifetimes, constructor selection and fallback, explicit arguments, cycle detection, error propagation, argument validation, thread safety. See [Tests](#tests). |
 
 ---
 
@@ -87,7 +90,9 @@ All of the following lives in [`Shos.DI/DIContainer.cs`](Shos.DI/DIContainer.cs)
 public class DIContainer
 {
     // Register a type so the container is allowed to construct it.
-    // Interfaces, abstract classes and open generic types are rejected with ArgumentException.
+    // Only concrete classes can be registered: interfaces, abstract and static classes, value types
+    // and open generic types are rejected with ArgumentException (closed generics such as List<int> are fine).
+    // Registering a type again discards its cached instance.
     public void Register<T>();
     public void Register(Type type);
     public bool Register(string typeName);                  // late-bound, by type name
@@ -136,16 +141,18 @@ object? Resolve(Type type, HashSet<Type> resolving)
 
 Step by step:
 
-1. **Cache lookup.** A registered type is built once and cached in its `TypeInformation`, so it is a singleton within one container. Its registered dependencies are singletons too, and are shared by everything that needs them.
+1. **Cache lookup.** A registered type is built once and cached in its `TypeInformation`, so it is a singleton within one container. Its registered dependencies are singletons too, and are shared by everything that needs them — even when two branches of the graph depend on the same type. Separate containers never share instances, and calling `Register` again for a type starts it over with an empty cache.
 2. **Constructor enumeration.** Every public constructor is a candidate. They are discovered once via `Type.GetConstructors()`, sorted by parameter count (most first), and cached.
 3. **Recursive resolution.** Each parameter type is resolved by calling `Resolve` again. This is what turns a flat list of `Register` calls into a full object graph.
-4. **Graceful fallback.** If any parameter cannot be produced, that constructor is skipped and the next one is tried — the "greediest constructor that can be satisfied" rule real containers use.
-5. **Unregistered types.** A type that was never registered still gets one chance: `Type.GetConstructor(Type.EmptyTypes)?.Invoke([])`, i.e. parameterless construction — a new instance every time. Look at `Coo` in the console sample — it is never registered, yet it is created, because `Boo2` needs it and it has a default constructor.
-6. **Cycle detection.** The types currently being built are tracked. If one is requested again before it is finished, an `InvalidOperationException` names the cycle (for example `Cycle1 -> Cycle2 -> Cycle1`) instead of recursing until the stack overflows.
+4. **Graceful fallback.** If any parameter cannot be produced, that constructor is skipped and the next one is tried — the "greediest constructor that can be satisfied" rule real containers use. If no constructor can be satisfied (say, every one needs an interface or an `int`), the result is `null`, and nothing is cached, so the next request tries again.
+5. **Unregistered types.** A type that was never registered still gets one chance: `Type.GetConstructor(Type.EmptyTypes)?.Invoke([])`, i.e. public parameterless construction — a new instance every time. Interfaces, value types such as `int`, and classes without a public parameterless constructor therefore resolve to `null`. Look at `Coo` in the console sample — it is never registered, yet it is created, because `Boo2` needs it and it has a default constructor.
+6. **Cycle detection.** The types currently being built are tracked. If one is requested again before it is finished — including a type that asks for itself — an `InvalidOperationException` names the cycle (for example `Cycle1 -> Cycle2 -> Cycle1`) instead of recursing until the stack overflows. The `finally` block takes a type off the list even when its resolution fails, so a dependency that could not be built and is requested again later in the same graph is not mistaken for a cycle.
+
+If a constructor itself throws, the exception is not swallowed: it reaches the caller wrapped in a `TargetInvocationException` (that is how `ConstructorInfo.Invoke` reports it), and no instance is cached.
 
 ### Supplying constructor arguments yourself
 
-`GetInstance(type, parameters)` does not resolve anything. It picks the greediest public constructor whose parameters accept the given arguments — an argument of a derived type matches a base-type parameter, and `null` matches any reference-type parameter — and invokes it. The result is **always a new instance** and is never cached, so the arguments you pass are never silently ignored, and the singleton that `GetInstance(type)` builds is not affected.
+`GetInstance(type, parameters)` does not resolve anything. It picks the greediest public constructor whose parameters accept the given arguments — an argument of a derived type matches a base-type parameter, a boxed value matches its value-type parameter (`42` fits `int` and `int?`), and `null` matches any reference-type or `Nullable<T>` parameter but never a plain value type — and invokes it. If no constructor fits, the result is `null`. It works for unregistered types too. The result is **always a new instance** and is never cached, so the arguments you pass are never silently ignored, and the singleton that `GetInstance(type)` builds is not affected.
 
 ### Thread safety
 
@@ -362,7 +369,7 @@ public WebAppManager()
     foreach (var type in types)
         container.Register(type);                 // every class becomes injectable
 
-    controllerTypes = types.Where(type => type.Name.EndsWith(controllerSuffix, StringComparison.Ordinal)).ToList();
+    controllerTypes = [.. types.Where(type => type.Name.EndsWith(controllerSuffix, StringComparison.Ordinal))];
 }
 ```
 
@@ -457,6 +464,27 @@ Index: ContextX(ContextOptionY: Option-Y)
 ```
 
 …and that string travelled through routing, container resolution of a three-level object graph, reflection-based action invocation, and the response pipeline — all of it visible in code you can read in one sitting.
+
+---
+
+## Tests
+
+[`Shos.DI.Tests/DIContainerTests.cs`](Shos.DI.Tests/DIContainerTests.cs) is an executable specification of the container. Every rule described in [How the container works](#how-the-container-works) has a test, grouped roughly as follows:
+
+| Area | What is verified |
+| --- | --- |
+| Lifetimes | Registered types are singletons per container (also for closed generics) and shared across the graph, including diamond-shaped graphs; unregistered types are transient; containers do not share instances; re-registering discards the cached instance. |
+| Constructor selection | The greediest satisfiable constructor wins; unsatisfiable constructors are skipped; `null` when nothing can be built (interface or value-type parameters, no public constructor). |
+| Explicit arguments | Always a new instance; derived-type, boxed value-type and `null` matching (`int` vs `int?`); no effect on the resolved singleton; resolution by type name. |
+| Failure handling | Circular and self dependencies throw `InvalidOperationException`; constructor exceptions surface as `TargetInvocationException` and are not cached; a dependency that fails twice in one graph is not reported as a cycle. |
+| Argument validation | `null` arguments throw `ArgumentNullException`; non-instantiable types (interfaces, abstract and static classes, structs, open generics) throw `ArgumentException`; unknown type names are rejected. |
+| Thread safety | 64 concurrent requests for a slow-to-construct singleton invoke its constructor exactly once. |
+
+```bash
+dotnet test Shos.DI.sln
+```
+
+[GitHub Actions](.github/workflows/build.yml) builds the solution, runs the tests and runs `Shos.DI.Sample` on both Ubuntu and Windows for every push to `main` and every pull request.
 
 ---
 
@@ -566,7 +594,7 @@ These are intentional. Knowing what Shos.DI leaves out is part of understanding 
 
 - **No interface-to-implementation mapping.** You register and resolve concrete types; there is no `AddScoped<IClock, SystemClock>()` equivalent. Registering an interface or an abstract class throws `ArgumentException`.
 - **One lifetime only.** Every registered type is a singleton within its container (unregistered types and explicit-argument creation always produce new instances). There are no transient or scoped registrations and no `IDisposable` tracking. In the web sample this means a controller is built once and shared by all requests, whereas ASP.NET Core creates a new controller per request.
-- **Silent failure.** Unresolvable dependencies yield `null` rather than a descriptive exception (circular dependencies are the exception: they throw).
+- **Silent failure.** Unresolvable dependencies yield `null` rather than a descriptive exception saying which dependency was missing. Only circular dependencies (`InvalidOperationException`) and exceptions thrown by constructors (`TargetInvocationException`) are reported.
 - **The web server** handles `GET` only, has no view engine (actions return plain strings), no model binding and no static file serving.
 
 ---
