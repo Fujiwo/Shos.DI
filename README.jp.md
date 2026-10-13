@@ -412,8 +412,6 @@ namespace Shos.DI.WebApp;
 
 public class HomeController(ContextX context, HogeHoge hogeHoge)
 {
-    readonly ContextX context = context;
-
     public string Index()  => $"{nameof(Index)}: {context}";
     public string Detail() => $"{nameof(Detail)}: {context}";
 }
@@ -423,14 +421,12 @@ public class HogeHoge
 
 public class ContextX(ContextOptionY option)
 {
-    readonly ContextOptionY option = option;
-
     public override string ToString() => $"{nameof(ContextX)}({nameof(ContextOptionY)}: {option})";
 }
 
 public class ContextOptionY
 {
-    public override string ToString() => $"Option-Y";
+    public override string ToString() => "Option-Y";
 }
 ```
 
@@ -557,7 +553,7 @@ curl -i -X POST http://localhost:8080/Home/Index
 ## 使用技術
 
 - [.NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) (`net10.0`)
-- C# 12 以降 — ファイル スコープ名前空間、プライマリ コンストラクター、コレクション式 (`[]`)、null 許容参照型、暗黙的な using を使用
+- C# 14 — 拡張メンバー (拡張プロパティを含む `extension` ブロック)、`field` キーワード、`System.Threading.Lock` 型、ファイル スコープ名前空間、プライマリ コンストラクター、コレクション式 (`[]`、`[.. ]`)、null 許容参照型、暗黙的な using を使用
 - `System.Reflection` — コンテナの仕組みのすべて
 - `System.Net.HttpListener` — Web サーバーのトランスポート
 - コンテナ、サンプル、Web サーバーではサードパーティ パッケージを一切使用していません (テスト プロジェクトのみ xUnit を使用)

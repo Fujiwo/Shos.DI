@@ -412,8 +412,6 @@ namespace Shos.DI.WebApp;
 
 public class HomeController(ContextX context, HogeHoge hogeHoge)
 {
-    readonly ContextX context = context;
-
     public string Index()  => $"{nameof(Index)}: {context}";
     public string Detail() => $"{nameof(Detail)}: {context}";
 }
@@ -423,14 +421,12 @@ public class HogeHoge
 
 public class ContextX(ContextOptionY option)
 {
-    readonly ContextOptionY option = option;
-
     public override string ToString() => $"{nameof(ContextX)}({nameof(ContextOptionY)}: {option})";
 }
 
 public class ContextOptionY
 {
-    public override string ToString() => $"Option-Y";
+    public override string ToString() => "Option-Y";
 }
 ```
 
@@ -557,7 +553,7 @@ Press `q` in the server console to shut down. When standard input is redirected 
 ## Built With
 
 - [.NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) (`net10.0`)
-- C# 12 or later, using file-scoped namespaces, primary constructors, collection expressions (`[]`), nullable reference types, and implicit usings
+- C# 14, using extension members (`extension` blocks, including extension properties), the `field` keyword, the `System.Threading.Lock` type, file-scoped namespaces, primary constructors, collection expressions (`[]`, `[.. ]`), nullable reference types, and implicit usings
 - `System.Reflection` — the container's entire mechanism
 - `System.Net.HttpListener` — the web server's transport
 - No third-party packages in the container, the samples or the web server (only the test project uses xUnit)

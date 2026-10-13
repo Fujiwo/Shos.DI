@@ -1,8 +1,7 @@
-namespace Shos.DI.WebServer;
-
-using System;
 using System.Net;
 using System.Text;
+
+namespace Shos.DI.WebServer;
 
 class SampleServer : IDisposable
 {

@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+      <LangVersion>14</LangVersion>
       <EnableNETAnalyzers>true</EnableNETAnalyzers>
       <AnalysisLevel>latest-Minimum</AnalysisLevel>
   </PropertyGroup>

@@ -24,7 +24,7 @@ class WebAppManager
         foreach (var type in types)
             container.Register(type);
 
-        controllerTypes = types.Where(type => type.Name.EndsWith(controllerSuffix, StringComparison.Ordinal)).ToList();
+        controllerTypes = [.. types.Where(type => type.Name.EndsWith(controllerSuffix, StringComparison.Ordinal))];
     }
 
     public string? GetView(Uri url)

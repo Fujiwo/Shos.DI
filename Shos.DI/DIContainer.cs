@@ -39,7 +39,7 @@ public class DIContainer
         lock (syncRoot)
             constructors = typeInformations.TryGetValue(type, out var typeInformation)
                            ? typeInformation.Constructors
-                           : TypeInformation.GetOrderedConstructors(type);
+                           : type.OrderedConstructors;
 
         return constructors.FirstOrDefault(constructor => constructor.CanAccept(parameters))?.Invoke(parameters);
     }
@@ -49,7 +49,7 @@ public class DIContainer
     public void Register(Type type)
     {
         ArgumentNullException.ThrowIfNull(type);
-        if (!type.IsInstantiable())
+        if (!type.IsInstantiable)
             throw new ArgumentException($"{type} cannot be registered: it must be a non-abstract, non-generic-definition class.", nameof(type));
         lock (syncRoot)
             typeInformations[type] = new TypeInformation(type);
@@ -95,34 +95,36 @@ public class DIContainer
 
 class TypeInformation(Type type)
 {
-    ConstructorInfo[]? constructors = null;
-
     public Type    Type     { get; } = type;
     public object? Instance { get; set; }
 
-    public IEnumerable<ConstructorInfo> Constructors => constructors ??= GetOrderedConstructors(Type);
-
-    public static ConstructorInfo[] GetOrderedConstructors(Type type)
-        => type.GetConstructors().OrderByDescending(constructor => constructor.GetParameters().Length)
-                                 .ToArray();
+    public IEnumerable<ConstructorInfo> Constructors => field ??= Type.OrderedConstructors;
 }
 
-static class TypeExtensions
+static class ReflectionExtensions
 {
-    public static bool IsInstantiable(this Type @this)
-        => @this.IsClass && !@this.IsAbstract && !@this.ContainsGenericParameters;
-
-    public static object? GetInstance(this Type @this)
-        => @this.GetConstructor(Type.EmptyTypes)?.Invoke([]);
-
-    public static bool CanAccept(this ConstructorInfo @this, object?[] arguments)
+    extension(Type type)
     {
-        var parameters = @this.GetParameters();
-        return parameters.Length == arguments.Length &&
-               parameters.Zip(arguments).All(pair => pair.First.ParameterType.CanAccept(pair.Second));
+        public bool IsInstantiable => type.IsClass && !type.IsAbstract && !type.ContainsGenericParameters;
+
+        // Public constructors, greediest first.
+        public ConstructorInfo[] OrderedConstructors
+            => [.. type.GetConstructors().OrderByDescending(constructor => constructor.GetParameters().Length)];
+
+        public object? GetInstance() => type.GetConstructor(Type.EmptyTypes)?.Invoke([]);
+
+        bool CanAccept(object? argument)
+            => argument is null ? !type.IsValueType || Nullable.GetUnderlyingType(type) is not null
+                                : type.IsInstanceOfType(argument);
     }
 
-    static bool CanAccept(this Type @this, object? argument)
-        => argument is null ? !@this.IsValueType || Nullable.GetUnderlyingType(@this) is not null
-                            : @this.IsInstanceOfType(argument);
+    extension(ConstructorInfo constructor)
+    {
+        public bool CanAccept(object?[] arguments)
+        {
+            var parameters = constructor.GetParameters();
+            return parameters.Length == arguments.Length &&
+                   parameters.Zip(arguments).All(pair => pair.First.ParameterType.CanAccept(pair.Second));
+        }
+    }
 }
