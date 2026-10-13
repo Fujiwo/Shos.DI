@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Shos.DI.Tests;
 
 public class DIContainerTests
@@ -172,6 +174,9 @@ public class DIContainerTests
     [InlineData(typeof(IService))]
     [InlineData(typeof(AbstractService))]
     [InlineData(typeof(List<>))]
+    [InlineData(typeof(int))]
+    [InlineData(typeof(Point))]
+    [InlineData(typeof(StaticClass))]
     public void RegisteringNonInstantiableTypeThrows(Type type)
         => Assert.Throws<ArgumentException>(() => new DIContainer().Register(type));
 
@@ -214,12 +219,148 @@ public class DIContainerTests
     public async Task ConcurrentResolutionYieldsSingleInstance()
     {
         var container = new DIContainer();
-        container.Register<Leaf>();
-        container.Register<Branch>();
+        container.Register<Counter>();
+        container.Register<SlowConstruction>();
+        var counter   = container.GetInstance<Counter>();
 
-        var branches  = await Task.WhenAll(Enumerable.Range(0, 64).Select(_ => Task.Run(container.GetInstance<Branch>)));
+        var instances = await Task.WhenAll(Enumerable.Range(0, 64).Select(_ => Task.Run(container.GetInstance<SlowConstruction>)));
 
-        Assert.All(branches, branch => Assert.Same(branches[0], branch));
+        Assert.All(instances, instance => Assert.Same(instances[0], instance));
+        Assert.Equal(1, counter?.Value);
+    }
+
+    [Fact]
+    public void DiamondDependencyIsResolvedWithSharedInstance()
+    {
+        var container = new DIContainer();
+        container.Register<Bottom>();
+        container.Register<Left>();
+        container.Register<Right>();
+        container.Register<Top>();
+
+        var top       = container.GetInstance<Top>();
+
+        Assert.NotNull(top);
+        Assert.Same(top.Left.Bottom, top.Right.Bottom);
+    }
+
+    [Fact]
+    public void UnresolvableDependencyRequestedTwiceIsNotReportedAsCircular()
+    {
+        var container = new DIContainer();
+        container.Register<NeedsService>();
+        container.Register<NeedsServiceTwice>();
+
+        Assert.Equal(0, container.GetInstance<NeedsServiceTwice>()?.ParameterCount);
+    }
+
+    [Fact]
+    public void SelfDependencyThrows()
+    {
+        var container = new DIContainer();
+        container.Register<SelfCycle>();
+
+        Assert.Throws<InvalidOperationException>(() => container.GetInstance<SelfCycle>());
+    }
+
+    [Fact]
+    public void ConstructorExceptionPropagatesAndIsNotCached()
+    {
+        var container = new DIContainer();
+        container.Register<Throwing>();
+        container.Register<NeedsThrowing>();
+
+        var exception = Assert.Throws<TargetInvocationException>(() => container.GetInstance<NeedsThrowing>());
+        Assert.IsType<NotSupportedException>(exception.InnerException);
+        Assert.Throws<TargetInvocationException>(() => container.GetInstance<NeedsThrowing>());
+    }
+
+    [Theory]
+    [InlineData(typeof(NeedsService))]
+    [InlineData(typeof(NeedsInt))]
+    public void RegisteredTypeWithoutSatisfiableConstructorIsNull(Type type)
+    {
+        var container = new DIContainer();
+        container.Register(type);
+
+        Assert.Null(container.GetInstance(type));
+    }
+
+    [Fact]
+    public void TypeWithoutPublicConstructorIsNull()
+    {
+        var container = new DIContainer();
+        Assert.Null(container.GetInstance<PrivateConstructor>());
+
+        container.Register<PrivateConstructor>();
+        Assert.Null(container.GetInstance<PrivateConstructor>());
+    }
+
+    [Fact]
+    public void ExplicitArgumentsMatchValueTypeParameter()
+        => Assert.Equal(42, new DIContainer().GetInstance<NeedsInt>(42)?.Value);
+
+    [Fact]
+    public void ExplicitNullArgumentDoesNotMatchValueTypeParameter()
+        => Assert.Null(new DIContainer().GetInstance<NeedsInt>((object?)null));
+
+    [Fact]
+    public void ExplicitArgumentsMatchNullableValueTypeParameter()
+    {
+        var container = new DIContainer();
+
+        var withNull  = container.GetInstance<NeedsNullableInt>((object?)null);
+        var withValue = container.GetInstance<NeedsNullableInt>(42);
+
+        Assert.NotNull(withNull);
+        Assert.Null(withNull.Value);
+        Assert.Equal(42, withValue?.Value);
+    }
+
+    [Fact]
+    public void ResolveByNameWithExplicitArguments()
+    {
+        var container = new DIContainer();
+        var leaf      = new Leaf();
+
+        var branch    = container.GetInstance(typeof(Branch).FullName!, leaf);
+
+        Assert.Same(leaf, Assert.IsType<Branch>(branch).Leaf);
+        Assert.Null(container.GetInstance("No.Such.Type", leaf));
+    }
+
+    [Fact]
+    public void NullArgumentsThrow()
+    {
+        var container = new DIContainer();
+
+        Assert.Throws<ArgumentNullException>(() => container.GetInstance((Type)null!));
+        Assert.Throws<ArgumentNullException>(() => container.GetInstance((Type)null!, new Leaf()));
+        Assert.Throws<ArgumentNullException>(() => container.GetInstance(typeof(Leaf), (object?[])null!));
+        Assert.Throws<ArgumentNullException>(() => container.Register((Type)null!));
+    }
+
+    [Fact]
+    public void ClosedGenericTypeCanBeRegistered()
+    {
+        var container = new DIContainer();
+        container.Register<List<int>>();
+
+        var list      = container.GetInstance<List<int>>();
+
+        Assert.NotNull(list);
+        Assert.Same(list, container.GetInstance<List<int>>());
+    }
+
+    [Fact]
+    public void ContainersDoNotShareSingletons()
+    {
+        var container1 = new DIContainer();
+        var container2 = new DIContainer();
+        container1.Register<Leaf>();
+        container2.Register<Leaf>();
+
+        Assert.NotSame(container1.GetInstance<Leaf>(), container2.GetInstance<Leaf>());
     }
 }
 
@@ -266,3 +407,88 @@ public interface IService
 
 public abstract class AbstractService
 {}
+
+public struct Point
+{}
+
+public static class StaticClass
+{}
+
+public class Bottom
+{}
+
+public class Left(Bottom bottom)
+{
+    public Bottom Bottom { get; } = bottom;
+}
+
+public class Right(Bottom bottom)
+{
+    public Bottom Bottom { get; } = bottom;
+}
+
+public class Top(Left left, Right right)
+{
+    public Left  Left  { get; } = left;
+    public Right Right { get; } = right;
+}
+
+public class SelfCycle
+{
+    public SelfCycle(SelfCycle _) {}
+}
+
+public class Throwing
+{
+    public Throwing() => throw new NotSupportedException();
+}
+
+public class NeedsThrowing
+{
+    public NeedsThrowing(Throwing _) {}
+}
+
+public class NeedsService
+{
+    public NeedsService(IService _) {}
+}
+
+public class NeedsServiceTwice
+{
+    public int ParameterCount { get; }
+
+    public NeedsServiceTwice()                                 => ParameterCount = 0;
+    public NeedsServiceTwice(NeedsService _, NeedsService __) => ParameterCount = 2;
+}
+
+public class NeedsInt(int value)
+{
+    public int Value { get; } = value;
+}
+
+public class NeedsNullableInt(int? value)
+{
+    public int? Value { get; } = value;
+}
+
+public class PrivateConstructor
+{
+    PrivateConstructor() {}
+}
+
+public class Counter
+{
+    int value;
+
+    public int  Value       => Volatile.Read(ref value);
+    public void Increment() => Interlocked.Increment(ref value);
+}
+
+public class SlowConstruction
+{
+    public SlowConstruction(Counter counter)
+    {
+        counter.Increment();
+        Thread.Sleep(20);
+    }
+}
